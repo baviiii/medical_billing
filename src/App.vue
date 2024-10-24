@@ -1,5 +1,6 @@
 <template>
   <div id="app">
+    <NavBarComponent /> <!-- Use NavBarComponent instead of Navbar -->
     <header>
       <h1>Medical Billing Portal</h1>
     </header>
@@ -16,7 +17,11 @@
 </template>
 
 <script>
+import NavBarComponent from './components/NavBarComponent.vue';
 export default {
   name: 'App',
-}
+  components: {
+    NavBarComponent // Keep this as NavBarComponent
+  }
+};
 </script>
