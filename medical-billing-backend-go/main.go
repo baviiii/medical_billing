@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var client *mongo.Client
@@ -21,6 +22,64 @@ type User struct {
 	ID       primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Username string             `json:"username" bson:"username"`
 	Password string             `json:"password" bson:"password"` // Store hashed password
+}
+
+func hashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+func checkPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+func registerUser(w http.ResponseWriter, r *http.Request) {
+	var user User
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Hash the password
+	hashedPassword, err := hashPassword(user.Password)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	user.Password = hashedPassword
+
+	collection := client.Database("medical-billing").Collection("users")
+	_, err = collection.InsertOne(context.TODO(), user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(user)
+}
+
+func loginUser(w http.ResponseWriter, r *http.Request) {
+	var user User
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	collection := client.Database("medical-billing").Collection("users")
+	var foundUser User
+	err = collection.FindOne(context.TODO(), bson.M{"username": user.Username}).Decode(&foundUser)
+	if err != nil || !checkPasswordHash(user.Password, foundUser.Password) {
+		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+		return
+	}
+
+	// Successful login, set session or JWT here (optional)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(foundUser)
 }
 
 // Bill struct to represent a bill document
@@ -111,6 +170,8 @@ func main() {
 	r.HandleFunc("/", homeHandler).Methods("GET")
 	r.HandleFunc("/bills", createBill).Methods("POST")
 	r.HandleFunc("/bills", getBills).Methods("GET") // Route to fetch bills
+	r.HandleFunc("/register", registerUser).Methods("POST")
+	r.HandleFunc("/login", loginUser).Methods("POST")
 
 	// Enable CORS for the server
 	corsHandler := cors.AllowAll().Handler(r)
