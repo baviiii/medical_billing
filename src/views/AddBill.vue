@@ -32,22 +32,31 @@ export default {
         alert("Please fill out all fields.");
         return;
       }
-      
+
+      const token = localStorage.getItem('token');
       try {
-        const response = await axios.post('http://localhost:8080/bills', this.bill);
+        const response = await axios.post('http://localhost:8080/bills', this.bill, {
+          headers: {
+            Authorization: `Bearer ${token}`, // Include the token in the request
+          },
+        });
         console.log("Bill Submitted:", response.data);
         
-        // Optionally reset the form after submission
+        // Reset the form after submission
         this.bill.name = '';
         this.bill.amount = '';
 
-        // Optionally, provide feedback to the user
+        // Provide feedback to the user
         alert("Bill added successfully!");
       } catch (error) {
-        console.error("Error submitting bill:", error);
+        console.error("Error submitting bill:", error.response ? error.response.data : error.message);
         alert("There was an error adding the bill.");
       }
     }
   }
 };
 </script>
+
+<style scoped>
+/* Add basic styles here */
+</style>
